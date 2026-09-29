@@ -1,0 +1,11 @@
+# Globale git-Konfiguration nur für dependabotbot (wird von run.sh über GIT_CONFIG_GLOBAL gesetzt).
+[credential "https://github.com"]
+	helper =
+	helper = !gh auth git-credential
+[url "https://github.com/"]
+	insteadOf = git@github.com:
+	insteadOf = ssh://git@github.com/
+[init]
+	defaultBranch = main
+[push]
+	autoSetupRemote = true

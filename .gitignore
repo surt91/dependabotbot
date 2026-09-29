@@ -1,0 +1,5 @@
+.env
+.gh-config/
+bin/
+workspace/
+reports/
