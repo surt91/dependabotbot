@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """PreToolUse-Guard für dependabotbot.
 
-Verhindert u. a.: Pushes außerhalb von dependabotbot/*-Branches, Force-Pushes, Änderungen an
-.github/workflows/ (der PAT hat keine Workflows-Berechtigung), Mergen von PRs,
+Verhindert u. a.: Pushes außerhalb von dependabotbot/*-Branches, Force-Pushes, riskante Änderungen an
+Workflows (neue/gelöschte Dateien, Trigger, Berechtigungen, Secrets), Mergen von PRs,
 schreibende GitHub-API-Aufrufe (außer Reviewer/Assignees/Kommentare), Zugriff auf .env und Token,
 Umgehen der isolierten gh/git-Konfiguration sowie Dateiänderungen außerhalb von workspace/ und reports/.
 
@@ -18,7 +18,23 @@ import sys
 
 OWNER = "surt91"
 BRANCH_PREFIX = "dependabotbot/"
-WORKFLOW_DIR = ".github/workflows/"
+WORKFLOW_DIRS = (".github/workflows/", ".github/actions/")
+# Workflow-Zeilen mit diesen Mustern werden beim Push abgelehnt (hinzugefügt; bei Triggern und
+# Berechtigungen auch entfernt). Workflows auf einem Branch im
+# selben Repo laufen mit den Secrets des Repos – schon vor dem Merge.
+RISKY_WORKFLOW_LINES = [
+    (re.compile(r"secrets\.|secrets\[|toJSON\(\s*secrets"), "Zugriff auf Secrets", False),
+    (re.compile(r"GITHUB_TOKEN|GH_TOKEN|github\.token"), "Zugriff auf Tokens", False),
+    (re.compile(r"^\s*(on|push|pull_request|pull_request_target|workflow_run|workflow_dispatch|workflow_call|"
+                r"repository_dispatch|schedule|release|deployment|issue_comment|branches|tags)\s*:"),
+     "Änderung an Triggern", True),
+    (re.compile(r"pull_request_target|workflow_run"), "privilegierte Trigger", True),
+    (re.compile(r"^\s*permissions\s*:|:\s*write\b|write-all|id-token"), "Änderung an Berechtigungen", True),
+    (re.compile(r"^\s*(environment|concurrency)\s*:"), "Deployment-Umgebungen", True),
+    (re.compile(r"(curl|wget)\b.*\|\s*(sudo\s+)?(ba|z|da)?sh\b"), "Skript aus dem Netz ausführen", False),
+    (re.compile(r"\$\{\{\s*github\.event\.(issue|comment|pull_request\.(title|body)|head_commit)"),
+     "Script-Injection über Event-Daten", False),
+]
 
 ALLOWED_GH = {
     "pr": {"list", "view", "create", "edit", "checks", "diff", "status", "comment", "ready"},
@@ -132,7 +148,7 @@ def check_git(args, cwd):
             dst = dst.removeprefix("refs/heads/")
             if not dst.startswith(BRANCH_PREFIX):
                 deny(f"Push nur auf Branches mit Präfix `{BRANCH_PREFIX}` erlaubt, nicht auf `{dst}`.")
-            check_no_workflow_changes(cwd, src)
+            check_workflow_changes(cwd, src)
     elif sub == "remote" and rest[:1] and rest[0] in {"add", "set-url", "rename", "remove", "rm"}:
         deny("Remotes dürfen nicht verändert werden.")
     elif sub == "config" and any(a in {"--global", "--system", "--file", "-f"} for a in rest):
@@ -144,19 +160,35 @@ def check_git(args, cwd):
             deny(f"Nur Repos von {OWNER} dürfen geklont werden (am besten mit `gh repo clone {OWNER}/<repo>`).")
 
 
-def check_no_workflow_changes(cwd, src):
-    """Verweigert den Push, wenn src gegenüber dem Default-Branch Dateien unter .github/workflows/ ändert."""
-    diff = subprocess.run(["git", "-C", cwd, "diff", "--name-only", f"origin/HEAD...{src}"],
-                          capture_output=True, text=True)
+def git_diff(cwd, *args):
+    diff = subprocess.run(["git", "-C", cwd, "diff", *args], capture_output=True, text=True)
     if diff.returncode != 0:
         error = (diff.stderr.strip().splitlines() or ["unbekannter Fehler"])[0]
-        deny(f"Konnte nicht prüfen, ob `{src}` Workflow-Dateien ändert ({error}). "
-             "Push bitte aus dem Repo heraus (`git -C workspace/<repo> push ...`); origin/HEAD muss existieren "
+        deny(f"Konnte die Änderungen nicht prüfen ({error}). Push bitte aus dem Repo heraus "
+             "(`git -C workspace/<repo> push ...`); origin/HEAD muss existieren "
              "(ggf. `git remote set-head origin --auto`).")
-    changed = [f for f in diff.stdout.splitlines() if f.startswith(WORKFLOW_DIR)]
-    if changed:
-        deny(f"Der Branch ändert Workflow-Dateien ({', '.join(changed)}). Das darf der PAT nicht. "
-             "Änderungen daran zurücknehmen und den Alert als manuellen Schritt berichten.")
+    return diff.stdout
+
+
+def check_workflow_changes(cwd, src):
+    """Erlaubt nur Änderungen an bestehenden Workflows ohne riskante Muster (gegenüber dem Default-Branch)."""
+    base = f"origin/HEAD...{src}"
+    status = git_diff(cwd, "--name-status", "--no-renames", base, "--", *WORKFLOW_DIRS)
+    for line in status.splitlines():
+        kind, path = line.split("\t", 1)
+        if kind != "M":
+            deny(f"Workflow-Dateien dürfen nur geändert, nicht angelegt oder gelöscht werden ({kind} {path}).")
+    if not status:
+        return
+    path = None
+    for line in git_diff(cwd, "-U0", base, "--", *WORKFLOW_DIRS).splitlines():
+        if line.startswith("+++ "):
+            path = line[6:] if line.startswith("+++ b/") else line[4:]
+        elif line[:1] in "+-" and not line.startswith(("+++", "---")):
+            for pattern, reason, check_removed in RISKY_WORKFLOW_LINES:
+                if (line[0] == "+" or check_removed) and pattern.search(line[1:]):
+                    deny(f"Riskante Workflow-Änderung in {path} ({reason}): `{line.strip()}`. "
+                         "Das muss surt91 selbst machen – als Patch-Vorschlag im PR-Kommentar melden.")
 
 
 def check_gh_api(args):
@@ -249,9 +281,6 @@ def check_file_tool(tool, tool_input, project):
         if tool == "Grep" and real == project:
             deny("Grep bitte nicht über das ganze Projekt (dort liegt .env), sondern z. B. in workspace/<repo>.")
         return
-    if "/" + WORKFLOW_DIR in real:
-        deny("Dateien unter .github/workflows/ dürfen nicht geändert werden (keine Workflows-Berechtigung). "
-             "Den Alert als manuellen Schritt berichten.")
     if not any(real.startswith(os.path.join(project, d) + os.sep) for d in ("workspace", "reports")):
         deny("Dateien dürfen nur unter workspace/ und reports/ geändert werden.")
 

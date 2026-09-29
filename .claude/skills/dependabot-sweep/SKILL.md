@@ -31,9 +31,6 @@ Für jedes Repo in `workspace/status.json`:
     - `retry_after` ist erreicht.
 
     Nicht anfassen, im Bericht nur als Einzeiler unter „Zurückgestellt“ aufführen.
-  - **Workflow-Datei:** Ecosystem `github-actions`, also betroffene `uses:`-Einträge in `.github/workflows/`.
-    Der PAT darf keine Workflow-Dateien ändern, der Guard blockiert das. Nie selbst fixen. Gibt es einen
-    Dependabot-PR, kommt er unter „Mergebar“. Sonst ein manueller Schritt mit Datei, Action und gepatchter Version.
   - **Offen:** alle übrigen Alerts. Sie werden in Schritt 3 gefixt.
 
 Einträge in `reports/state.json` entfernen, deren Alert nicht mehr offen ist.

@@ -26,26 +26,32 @@ Unter https://github.com/settings/personal-access-tokens/new:
 | Dependabot alerts | Read | Alerts lesen |
 | Contents | Read and write | Klonen (auch privat), `dependabotbot/*`-Branches pushen |
 | Pull requests | Read and write | PRs erstellen, Assignee/Reviewer setzen, `@dependabot rebase` kommentieren |
+| Workflows | Read and write | Workflow-Dateien ändern (Actions-Alerts, CI-Reparaturen) |
 | Actions | Read | CI-Runs und Logs der eigenen PRs lesen (`watch-ci`) |
 | Commit statuses | Read | *optional:* Status-Checks externer CI-Dienste sehen |
 
-Alles andere bleibt auf „No access“, insbesondere **Workflows**, Administration, Secrets und Account-Permissions.
-Ohne Workflows-Recht kann der Agent nichts unter `.github/workflows/` ändern. Alerts für GitHub Actions
-landen deshalb immer im Bericht, und der Guard blockiert solche Änderungen schon vorher.
+Alles andere bleibt auf „No access“, insbesondere Administration, Secrets, Environments, Actions **write**
+und alle Account-Permissions.
+
+**Achtung beim Workflows-Recht:** Workflows auf einem Branch im selben Repo laufen mit den Secrets des Repos,
+schon vor dem Merge. Der Guard lässt deshalb nur Änderungen an bestehenden Workflows durch und lehnt beim Push
+riskante Zeilen ab: neue oder gelöschte Dateien, Trigger, `permissions`, Secrets und Tokens, `curl | sh`,
+Script-Injection. Details stehen in `CLAUDE.md` unter „Workflow-Änderungen“.
 
 ## Eigene Regeln
 
 In `rules.md` stehen deine eigenen Vorgaben, global, pro Ecosystem oder pro Repo. Beispiele: zusätzlich mit
 nightly bauen, großflächige Updates erlauben, längeres Zeitlimit. Beim ersten Start legt `run.sh` die Datei
 aus `rules.example.md` an. `rules.md` ist nicht im Repo. Die Regeln können Vorgaben lockern, aber nicht die
-harten Regeln aufheben (mergen, Default-Branch, Workflow-Dateien, Einstellungen).
+harten Regeln aufheben (mergen, Default-Branch, riskante Workflow-Änderungen, Einstellungen).
 
 ## CI
 
 Nach dem Anlegen der PRs beobachtet der Agent deren CI (Skill `watch-ci`):
 - Fehler, die sein Fix verursacht hat, repariert er mit neuen Commits, höchstens 2 Runden pro PR.
-- Fehler in Workflow oder Infrastruktur, z. B. ein fehlendes `apt-get update`, repariert er nicht. Dafür
-  fehlt ihm das Workflows-Recht. Er kommentiert stattdessen am PR mit einem Patch-Vorschlag.
+- Fehler in Workflow oder Infrastruktur, z. B. ein fehlendes `apt-get update` oder eine abgeschaltete Action,
+  repariert er im Rahmen der Workflow-Regeln. Bräuchte die Reparatur Secrets, Berechtigungen oder Trigger,
+  kommentiert er stattdessen am PR mit einem Patch-Vorschlag.
 - Ist die CI nach 20 Minuten nicht fertig, sieht er beim nächsten Lauf wieder nach.
 
 ## Isolation
@@ -57,7 +63,7 @@ Nach dem Anlegen der PRs beobachtet der Agent deren CI (Skill `watch-ci`):
   über HTTPS mit dem PAT, SSH ist abgeschaltet und der SSH-Agent wird aus der Umgebung entfernt.
 - Der Guard-Hook `.claude/hooks/guard.py` verweigert alle Bash-Befehle, wenn die Session nicht über `run.sh`
   läuft. Außerdem blockiert er Merges, Force-Pushes, Pushes außerhalb von `dependabotbot/*`,
-  Änderungen an `.github/workflows/`, schreibende API-Aufrufe, Zugriffe auf `.env` bzw. Tokens sowie Dateizugriffe außerhalb des Projekts.
+  riskante Workflow-Änderungen, schreibende API-Aufrufe, Zugriffe auf `.env` bzw. Tokens sowie Dateizugriffe außerhalb des Projekts.
 
 Der Hook ist eine Leitplanke und keine Sandbox. Die harte Grenze ziehen die Rechte des PAT.
 

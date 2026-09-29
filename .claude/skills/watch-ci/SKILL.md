@@ -1,6 +1,6 @@
 ---
 name: watch-ci
-description: Beobachtet die CI eines dependabotbot-PRs, ordnet Fehlschläge ein und behebt die, die durch den Fix verursacht wurden. Workflow- und Infrastrukturfehler werden mit Patch-Vorschlag berichtet. Wird von dependabot-sweep aufgerufen oder direkt für einen bestimmten PR.
+description: Beobachtet die CI eines dependabotbot-PRs, ordnet Fehlschläge ein und behebt sie, bei Workflow- und Infrastrukturfehlern im Rahmen der Workflow-Regeln. Wird von dependabot-sweep aufgerufen oder direkt für einen bestimmten PR.
 ---
 
 # CI eines dependabotbot-PRs beobachten und reparieren
@@ -40,7 +40,7 @@ Die Einordnung:
 | Klasse | Erkennungsmerkmal | Vorgehen |
 |---|---|---|
 | **durch den Fix verursacht** | Fehler im Build- oder Test-Schritt, der Log zeigt ein aktualisiertes Paket (Compile-Fehler, geänderte API, fehlschlagender Test) | reparieren (Schritt 3) |
-| **Workflow/Infrastruktur** | Fehler in einem Setup-Schritt (`apt-get`, Toolchain-Action, Cache, veraltete Action-Version) oder Meldungen wie „Unable to locate package“, „deprecated“, „Node.js 16 actions are deprecated“ | **nicht reparieren**, Patch vorschlagen (Schritt 4) |
+| **Workflow/Infrastruktur** | Fehler in einem Setup-Schritt (`apt-get`, Toolchain-Action, Cache, veraltete Action-Version) oder Meldungen wie „Unable to locate package“, „deprecated“, „Node.js 16 actions are deprecated“ | reparieren im Rahmen der Workflow-Regeln (Schritt 4) |
 | **vorbestehend** | Derselbe Job schlägt auch auf dem Default-Branch mit demselben Fehler fehl | nicht reparieren, berichten |
 | **flaky** | Netzwerk-Timeouts, 5xx beim Download, Runner abgebrochen | nicht reparieren. Ein Re-Run ist mit dem PAT nicht möglich, deshalb berichten |
 
@@ -58,11 +58,19 @@ Im Zweifel gilt ein Fehler **nicht** als „durch den Fix verursacht“.
 - **Höchstens 2 Reparaturrunden pro PR.** Ist die CI danach noch rot, den PR in einen Draft umwandeln
   (`gh pr ready <n> -R surt91/<repo> --undo`) und im Bericht mit Fehlerauszug und Einschätzung aufführen.
 
-## 4. Workflow- und Infrastrukturfehler melden
+## 4. Workflow- und Infrastrukturfehler
 
-Workflow-Dateien darf der Agent nicht ändern. Stattdessen einen Kommentar am PR hinterlassen,
-über die Kommentar-Datei `workspace/<repo>.ci-comment.md` und `gh pr comment <n> -R surt91/<repo> --body-file ...`.
-Der Kommentar enthält:
+**Reparieren**, wenn die Änderung in den Rahmen der „Workflow-Änderungen“ aus `CLAUDE.md` passt.
+Typische Fälle sind `sudo apt-get update` vor `apt-get install` oder eine abgeschaltete Action durch ihren
+gepflegten Nachfolger ersetzen, z. B. `actions-rs/toolchain` → `dtolnay/rust-toolchain`.
+- Minimal ändern, nur was den Fehler behebt. Eigener Commit `ci: <was und warum>`.
+- In der PR-Beschreibung den Abschnitt „Workflow-Änderungen“ ergänzen (`gh pr edit <n> -R surt91/<repo> --body-file ...`).
+- Pushen, dann zurück zu Schritt 1. Das zählt als Reparaturrunde.
+
+**Nur melden**, wenn der Guard den Push ablehnt oder die Reparatur verbotene Änderungen bräuchte, etwa Secrets,
+Berechtigungen, Trigger oder neue Workflow-Dateien. Den Workflow-Commit dann per `git revert` zurücknehmen
+und einen Kommentar am PR hinterlassen, über die Kommentar-Datei `workspace/<repo>.ci-comment.md` und
+`gh pr comment <n> -R surt91/<repo> --body-file ...`. Der Kommentar enthält:
 - den fehlgeschlagenen Job und Schritt und einen kurzen Log-Auszug (höchstens 20 Zeilen)
 - die Einschätzung, dass der Fehler nicht durch diesen PR verursacht wurde, mit Begründung
 - einen **konkreten Patch** als ```diff-Block für die Workflow-Datei, den surt91 selbst anwenden kann

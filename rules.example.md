@@ -5,7 +5,8 @@ Diese Datei nach `rules.md` kopieren (`run.sh` erledigt das beim ersten Start) u
 
 Die Regeln hier **ergänzen oder lockern** die Vorgaben aus `CLAUDE.md` und den Skills, z. B. Aufwandsstufen,
 Zeitlimits oder zusätzliche Prüfungen. Die **harten Regeln** lassen sich nicht aufheben: nie mergen,
-nie auf den Default-Branch pushen, keine Workflow-Dateien ändern, keine Einstellungen ändern.
+nie auf den Default-Branch pushen, keine riskanten Workflow-Änderungen (Secrets, Berechtigungen,
+Trigger, neue Dateien), keine Einstellungen ändern.
 Diese Grenzen setzt ohnehin der Guard durch.
 
 Bei Widersprüchen gilt der spezifischere Abschnitt: **Repo > Ecosystem > Alle Repos**.

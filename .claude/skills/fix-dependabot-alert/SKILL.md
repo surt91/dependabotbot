@@ -52,12 +52,14 @@ wenn dort eine `yarn.lock` liegt.
 | go | `go get <mod>@v<version>` + `go mod tidy` | ebenso |
 | rubygems | `bundle update <gem> --conservative` | ebenso |
 | composer | `composer update <pkg> --with-dependencies` | ebenso |
+| github-actions | `uses:` auf die gepatchte Version heben, im Stil des Repos (Tag oder SHA mit Versionskommentar); eigener Commit `ci: ...` | – |
 
 Danach prüfen, ob der Fix greift: Die aufgelöste Version in der Lockfile ist ≥ `patched_version`,
 und keine andere Stelle zieht noch die verwundbare Version.
 
-Dateien unter `.github/workflows/` werden **nie** geändert. Das blockieren der Guard und der PAT.
-Muss ein Fix dort ansetzen, z. B. bei einer Versions-Pin in einem Workflow, den Alert als manuellen Schritt berichten.
+Für Änderungen unter `.github/workflows/` gelten die „Workflow-Änderungen“-Regeln aus `CLAUDE.md`.
+Lehnt der Guard den Push wegen einer riskanten Workflow-Zeile ab, den Workflow-Commit zurücknehmen
+(`git revert`, kein Force-Push) und den Punkt als Patch-Vorschlag berichten.
 
 Ist das Ecosystem-Tool lokal nicht verfügbar, den Alert abbrechen mit dem Grund „Toolchain fehlt“.
 

