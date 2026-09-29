@@ -45,6 +45,12 @@ landen deshalb immer im Bericht, und der Guard blockiert solche Änderungen scho
 
 Der Hook ist eine Leitplanke und keine Sandbox. Die harte Grenze ziehen die Rechte des PAT.
 
+Tests für den Guard (nach jeder Änderung am Hook ausführen):
+
+```
+python3 -m unittest discover tests
+```
+
 ## Wöchentlich per cron
 
 ```
