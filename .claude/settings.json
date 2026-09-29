@@ -34,9 +34,7 @@
       "Glob",
       "Grep",
       "Edit(./workspace/**)",
-      "Write(./workspace/**)",
       "Edit(./reports/**)",
-      "Write(./reports/**)",
       "Skill"
     ],
     "deny": [
