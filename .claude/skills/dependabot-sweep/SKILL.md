@@ -1,6 +1,6 @@
 ---
 name: dependabot-sweep
-description: Kompletter Lauf von dependabotbot. Prüft alle Repos von surt91 auf Dependabot-Alerts, legt Fix-PRs an und schreibt einen Bericht. Für den wöchentlichen Lauf oder wenn der Nutzer "alles prüfen" möchte.
+description: Kompletter Lauf von dependabotbot. Prüft alle Repos von surt91 auf Dependabot-Alerts, legt Fix-PRs an, beobachtet und repariert deren CI und schreibt einen Bericht. Für den wöchentlichen Lauf oder wenn der Nutzer "alles prüfen" möchte.
 ---
 
 # Dependabot-Sweep
@@ -24,7 +24,7 @@ Für jedes Repo in `workspace/status.json`:
     (Branch `dependabot/<ecosystem>/<paket>-<version>`) und dessen Zielversion ≥ `patched_version` ist.
     Diese Alerts nicht selbst fixen.
   - **Schon in Arbeit:** Ein offener `dependabotbot/`-PR nennt die GHSA-ID in Titel oder Beschreibung
-    (`gh pr view <n> -R surt91/<repo> --json body`). Nichts tun, im Bericht erwähnen.
+    (`gh pr view <n> -R surt91/<repo> --json body`). Keinen neuen Fix bauen, der PR kommt in Schritt 4 auf die CI-Liste.
   - **Zurückgestellt:** Der Alert steht in `reports/state.json` (Schlüssel `<repo>#<GHSA>`), und nichts
     davon trifft zu:
     - `patched_version` hat sich geändert (bei `unmöglich`: es gibt jetzt eine).
@@ -48,7 +48,7 @@ Für jedes Repo mit offenen Alerts den Skill **`fix-dependabot-alert`** befolgen
 kommen in einen gemeinsamen PR. Repos mit `critical`/`high` zuerst bearbeiten, damit sie ein hartes Zeitlimit
 möglichst nicht trifft.
 
-**Nach jedem Repo** den Bericht (Schritt 4) und `reports/state.json` aktualisieren.
+**Nach jedem Repo** den Bericht (Schritt 5) und `reports/state.json` aktualisieren.
 
 Format von `reports/state.json` für abgebrochene bzw. nicht behebbare Alerts:
 
@@ -71,7 +71,14 @@ Nach dem zweiten `abgebrochen` in Folge wird daraus `aufwendig`.
 **Reviewer:** Ist der Login aus Schritt 1 `surt91`, kann GitHub den Autor nicht als Reviewer anfragen.
 Dann `--assignee surt91` statt `--reviewer surt91` verwenden. Ansonsten `--reviewer surt91 --assignee surt91`.
 
-## 4. Bericht
+## 4. CI beobachten
+
+Erst nach Schritt 3, damit die CI der neuen PRs schon laufen konnte, während die anderen Repos bearbeitet wurden.
+Für jeden neuen PR aus Schritt 3 und jeden bereits offenen `dependabotbot/`-PR, dessen CI nicht grün ist,
+den Skill **`watch-ci`** befolgen. Neue PRs mit `critical`/`high` zuerst.
+Die Zeitlimits aus `watch-ci` gelten pro PR. Nach jedem PR den Bericht aktualisieren.
+
+## 5. Bericht
 
 `reports/<YYYY-MM-DD>.md` mit genau diesen Abschnitten, jeweils mit klickbaren Links:
 
@@ -82,10 +89,10 @@ Dann `--assignee surt91` statt `--reviewer surt91` verwenden. Ansonsten `--revie
 - surt91/<repo>: <Titel> – <URL> (<mergeable>, Alter)
 
 ## Neue PRs von dependabotbot
-- surt91/<repo>: <Titel> – <URL> (behebt GHSA-..., GHSA-...)
+- surt91/<repo>: <Titel> – <URL> (behebt GHSA-..., GHSA-...) – CI: <grün / rot, repariert / rot, Workflow-Problem / läuft noch / keine CI>
 
 ## Bereits offene PRs von dependabotbot
-- ...
+- surt91/<repo>: <Titel> – <URL> – CI: <…>
 
 ## Manuelle Schritte
 - surt91/<repo>: <was und warum, ggf. Link zur Einstellungsseite>
@@ -100,7 +107,7 @@ Dann `--assignee surt91` statt `--reviewer surt91` verwenden. Ansonsten `--revie
 Leere Abschnitte mit „– keine –“ füllen. Die Datei nach jedem Repo mit dem Write-Tool komplett neu schreiben.
 Solange der Lauf noch nicht fertig ist, steht oben `> Lauf läuft noch …`. Diese Zeile am Ende entfernen.
 
-## 5. Kurzfassung
+## 6. Kurzfassung
 
 Zum Schluss `reports/<YYYY-MM-DD>.summary.txt` schreiben. Das ist reiner Text für eine Benachrichtigung:
 

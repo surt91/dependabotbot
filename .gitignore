@@ -1,4 +1,5 @@
 .env
+rules.md
 .gh-config/
 bin/
 workspace/

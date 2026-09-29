@@ -30,7 +30,9 @@ das vorher tun.
 | **aufwendig** | Major-Upgrade mit breiten Breaking Changes, Umbau vieler Stellen, Toolchain-/Sprachversion-Upgrade nötig, Konflikt zwischen mehreren Abhängigkeiten | **nicht umsetzen** → Abbruch mit Empfehlung |
 | **unmöglich** | Keine `patched_version`, Paket aufgegeben, Fix nur in unveröffentlichtem Upstream-Code | **nicht umsetzen** → „Nicht behebbar“ |
 
-Im Zweifel die höhere Stufe wählen. Hilfreicher Kontext für die Empfehlung: `scope: development`
+Im Zweifel die höhere Stufe wählen. **`rules.md` kann die Einstufung verschieben**, z. B. Major-Upgrades
+für ein Repo als „moderat“ erlauben, und zusätzliche Arbeit verlangen, etwa großflächige Updates.
+Die zutreffenden Abschnitte (Repo > Ecosystem > Alle Repos) vor der Triage lesen. Hilfreicher Kontext für die Empfehlung: `scope: development`
 bedeutet, dass die Abhängigkeit nur beim Bauen/Testen verwendet wird. Das spricht eher für „abwarten“
 oder „dismissen“ als für einen großen Umbau.
 
@@ -74,6 +76,9 @@ Wenn die Toolchain vorhanden und der Build schnell ist (wenige Minuten), bauen u
 z. B. `cargo test`, `npm test`, `uv run pytest` oder `./mvnw -q verify`.
 Scheitern Tests schon auf dem Default-Branch, ist das kein Blocker. Das kommt in die PR-Beschreibung.
 Ist lokales Testen nicht möglich, steht in der Beschreibung, dass die CI entscheidet.
+Zusätzliche Prüfungen aus `rules.md`, z. B. ein Build mit nightly, gehören dazu. Ihr Ergebnis kommt in die PR-Beschreibung.
+
+Nach dem Push übernimmt `watch-ci` in Schritt 4 von `dependabot-sweep`.
 
 ## 5. Commit, Push, PR
 

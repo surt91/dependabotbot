@@ -26,11 +26,27 @@ Unter https://github.com/settings/personal-access-tokens/new:
 | Dependabot alerts | Read | Alerts lesen |
 | Contents | Read and write | Klonen (auch privat), `dependabotbot/*`-Branches pushen |
 | Pull requests | Read and write | PRs erstellen, Assignee/Reviewer setzen, `@dependabot rebase` kommentieren |
-| Commit statuses, Actions | Read | *optional:* CI-Status von PRs sehen |
+| Actions | Read | CI-Runs und Logs der eigenen PRs lesen (`watch-ci`) |
+| Commit statuses | Read | *optional:* Status-Checks externer CI-Dienste sehen |
 
 Alles andere bleibt auf „No access“, insbesondere **Workflows**, Administration, Secrets und Account-Permissions.
 Ohne Workflows-Recht kann der Agent nichts unter `.github/workflows/` ändern. Alerts für GitHub Actions
 landen deshalb immer im Bericht, und der Guard blockiert solche Änderungen schon vorher.
+
+## Eigene Regeln
+
+In `rules.md` stehen deine eigenen Vorgaben, global, pro Ecosystem oder pro Repo. Beispiele: zusätzlich mit
+nightly bauen, großflächige Updates erlauben, längeres Zeitlimit. Beim ersten Start legt `run.sh` die Datei
+aus `rules.example.md` an. `rules.md` ist nicht im Repo. Die Regeln können Vorgaben lockern, aber nicht die
+harten Regeln aufheben (mergen, Default-Branch, Workflow-Dateien, Einstellungen).
+
+## CI
+
+Nach dem Anlegen der PRs beobachtet der Agent deren CI (Skill `watch-ci`):
+- Fehler, die sein Fix verursacht hat, repariert er mit neuen Commits, höchstens 2 Runden pro PR.
+- Fehler in Workflow oder Infrastruktur, z. B. ein fehlendes `apt-get update`, repariert er nicht. Dafür
+  fehlt ihm das Workflows-Recht. Er kommentiert stattdessen am PR mit einem Patch-Vorschlag.
+- Ist die CI nach 20 Minuten nicht fertig, sieht er beim nächsten Lauf wieder nach.
 
 ## Isolation
 
@@ -60,7 +76,7 @@ crontab -e
 ```
 
 Die Ausgabe landet in `reports/<Datum>-run.log`, der Bericht in `reports/<Datum>.md`.
-Harte Limits lassen sich in `.env` einstellen: `RUN_TIMEOUT` (Standard 90m) und optional `MAX_BUDGET_USD`.
+Harte Limits lassen sich in `.env` einstellen: `RUN_TIMEOUT` (Standard 120m) und optional `MAX_BUDGET_USD`.
 
 ## Benachrichtigung über Home Assistant
 

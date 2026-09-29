@@ -62,6 +62,7 @@ export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME" GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EM
 export DEPENDABOTBOT_RUN=1
 
 mkdir -p workspace reports
+[[ -f rules.md ]] || cp rules.example.md rules.md
 
 if [[ "${1:-}" == "--headless" ]]; then
   today="$(date +%F)"
@@ -70,11 +71,11 @@ if [[ "${1:-}" == "--headless" ]]; then
   [[ -n "${MAX_BUDGET_USD:-}" ]] && limits+=(--max-budget-usd "$MAX_BUDGET_USD")
 
   status=0
-  timeout --kill-after=2m "${RUN_TIMEOUT:-90m}" claude -p "/dependabot-sweep" "${limits[@]}" >>"$log" 2>&1 || status=$?
+  timeout --kill-after=2m "${RUN_TIMEOUT:-120m}" claude -p "/dependabot-sweep" "${limits[@]}" >>"$log" 2>&1 || status=$?
 
   if [[ $status -ne 0 ]]; then
     if [[ $status -eq 124 || $status -eq 137 ]]; then
-      reason="Zeitlimit ${RUN_TIMEOUT:-90m} erreicht"
+      reason="Zeitlimit ${RUN_TIMEOUT:-120m} erreicht"
     else
       reason="Exit-Code $status, siehe $log"
     fi
