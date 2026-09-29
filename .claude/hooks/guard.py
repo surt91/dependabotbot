@@ -21,10 +21,10 @@ BRANCH_PREFIX = "dependabotbot/"
 WORKFLOW_DIR = ".github/workflows/"
 
 ALLOWED_GH = {
-    "pr": {"list", "view", "create", "edit", "checks", "diff", "status", "comment"},
+    "pr": {"list", "view", "create", "edit", "checks", "diff", "status", "comment", "ready"},
     "repo": {"list", "view", "clone"},
     "issue": {"list", "view"},
-    "run": {"list", "view", "watch", "rerun"},
+    "run": {"list", "view", "watch"},
     "workflow": {"list", "view"},
     "release": {"list", "view"},
     "ruleset": {"list", "view", "check"},
@@ -74,11 +74,16 @@ def segments(command):
 
 
 def strip_prefix(words):
-    """Entfernt führende VAR=wert-Zuweisungen und Wrapper wie `env`, `command`, `time`."""
-    while words and (re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[0]) or words[0] in {"command", "time", "nohup"}):
+    """Entfernt führende VAR=wert-Zuweisungen und Wrapper wie `env`, `command`, `time`, `timeout`."""
+    while words and (re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[0]) or words[0] in {"command", "time", "nohup", "nice"}):
         words = words[1:]
     if words and words[0] == "env" and len(words) > 1:
         return strip_prefix(words[1:])
+    if words and words[0] == "timeout":
+        rest = words[1:]
+        while rest and rest[0].startswith("-"):
+            rest = rest[2:] if rest[0] in {"-k", "-s", "--kill-after", "--signal"} else rest[1:]
+        return strip_prefix(rest[1:])  # rest[0] ist die Dauer
     return words
 
 
@@ -221,7 +226,7 @@ def check_bash(command, cwd):
         prog, args = os.path.basename(words[0]), words[1:]
         if prog == "cd" and args:
             cwd = os.path.join(cwd, os.path.expanduser(args[0]))
-        if prog in {"printenv", "sudo", "su", "doas", "eval", "exec", "ssh", "scp"}:
+        if prog in {"printenv", "sudo", "su", "doas", "eval", "exec", "ssh", "scp", "xargs"}:
             deny(f"`{prog}` ist nicht erlaubt.")
         if prog in {"env", "set", "export", "declare", "typeset"} and (not args or args[0] in {"-p", "-x"}):
             deny("Umgebungsvariablen dürfen nicht ausgegeben werden.")

@@ -30,6 +30,9 @@
       "Bash(go *)",
       "Bash(bundle *)",
       "Bash(composer *)",
+      "Bash(sleep *)",
+      "Bash(timeout *)",
+      "Bash(rustup *)",
       "Read",
       "Glob",
       "Grep",
@@ -50,7 +53,10 @@
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session_start.py" }
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session_start.py"
+          }
         ]
       }
     ],
@@ -58,7 +64,10 @@
       {
         "matcher": "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob",
         "hooks": [
-          { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard.py" }
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard.py"
+          }
         ]
       }
     ]

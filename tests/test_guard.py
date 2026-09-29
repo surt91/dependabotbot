@@ -44,6 +44,13 @@ ALLOWED_BASH = [
     "git -C workspace/x checkout -B dependabotbot/security-2026-09-29 origin/main",
     "git -C workspace/x config user.name Test",
     "git -C workspace/x remote set-head origin --auto",
+    "timeout 540 gh run watch 123 -R surt91/x --exit-status > /dev/null",
+    "gh run view 123 -R surt91/x --log-failed | tail -n 150",
+    "gh run list -R surt91/x --branch dependabotbot/a --json status,conclusion",
+    "gh pr ready 5 -R surt91/x --undo",
+    "sleep 30",
+    "rustup toolchain install nightly --profile minimal",
+    "cd workspace/x && cargo +nightly test --lib",
 ]
 
 DENIED_BASH = [
@@ -106,6 +113,11 @@ DENIED_BASH = [
     "eval 'git push origin main'",
     "sudo ls",
     "ssh git@github.com",
+    "timeout 60 git push origin main",
+    "timeout -k 5 60 gh pr merge 3",
+    "nice git push origin main",
+    "echo main | xargs git push origin",
+    "gh run rerun 123",
     "echo 'unbalanced",
 ]
 
