@@ -12,7 +12,6 @@ Exit-Code 2 blockiert den Tool-Aufruf; stderr geht als Begründung an Claude.
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 
@@ -60,7 +59,8 @@ FORBIDDEN_TEXT = [
      "Die isolierte gh/git-Konfiguration darf nicht umgangen werden."),
     (re.compile(r"\benviron\b"), "Umgebungsvariablen dürfen nicht ausgelesen werden."),
 ]
-SEPARATORS = {"&&", "||", ";", "|", "&", ";;", "|&", "\n", "(", ")"}
+SEPARATORS = ("&&", "||", ";;", "|&", ";", "|", "&", "\n", "(", ")")  # längere zuerst
+REDIRECTS = ("&>>", "&>", ">>", ">&", ">|", "<<<", "<<-", "<<", "<&", "<>", ">", "<")
 
 
 def deny(reason):
@@ -68,18 +68,89 @@ def deny(reason):
     sys.exit(2)
 
 
+def tokenize(command):
+    """Zerlegt einen Shell-Befehl in Wörter und Trenner (None), mit Shell-Quoting.
+
+    Umleitungen (`2>&1`, `> datei`, `&>> log`, `<<EOF` …) werden samt Ziel verworfen, damit sie nicht als
+    Argumente missverstanden werden. Unvollständige Quotes lösen ValueError aus.
+    """
+    tokens, word, drop_next, i, n = [], None, False, 0, len(command)
+
+    def end_word():
+        nonlocal word, drop_next
+        if word is not None:
+            if drop_next:
+                drop_next = False  # Ziel einer Umleitung
+            else:
+                tokens.append(word)
+        word = None
+
+    while i < n:
+        c = command[i]
+        if c in " \t\r":
+            end_word()
+            i += 1
+        elif c == "\\":
+            if command[i + 1:i + 2] == "\n":
+                i += 2  # Zeilenfortsetzung
+            else:
+                word = (word or "") + command[i + 1:i + 2]
+                i += 2
+        elif c == "'":
+            j = command.find("'", i + 1)
+            if j < 0:
+                raise ValueError("offenes '")
+            word = (word or "") + command[i + 1:j]
+            i = j + 1
+        elif c == '"':
+            j, buf = i + 1, ""
+            while j < n and command[j] != '"':
+                if command[j] == "\\" and command[j + 1:j + 2] in ('"', "\\", "$", "`", "\n"):
+                    buf += command[j + 1]
+                    j += 2
+                else:
+                    buf += command[j]
+                    j += 1
+            if j >= n:
+                raise ValueError('offenes "')
+            word = (word or "") + buf
+            i = j + 1
+        elif c in "<>" or command.startswith("&>", i):
+            if word is not None and word.isdigit():
+                word = None  # Dateideskriptor wie in 2>
+            end_word()
+            op = next(r for r in REDIRECTS if command.startswith(r, i))
+            i += len(op)
+            if op in (">&", "<&"):
+                j = i
+                while j < n and (command[j].isdigit() or command[j] == "-"):
+                    j += 1
+                if j > i:
+                    i = j  # 2>&1, >&-: kein Dateiziel
+                    continue
+            drop_next = True
+        else:
+            sep = next((t for t in SEPARATORS if command.startswith(t, i)), None)
+            if sep:
+                end_word()
+                drop_next = False
+                tokens.append(None)
+                i += len(sep)
+            else:
+                word = (word or "") + c
+                i += 1
+    end_word()
+    return tokens
+
+
 def segments(command):
-    lex = shlex.shlex(command, posix=True, punctuation_chars=";&|()\n")
-    lex.whitespace = " \t\r"
-    lex.whitespace_split = True
-    lex.commenters = ""
     try:
-        tokens = list(lex)
+        tokens = tokenize(command)
     except ValueError:
         deny("Befehl konnte nicht sicher geparst werden – bitte einfacher formulieren.")
     current = []
     for tok in tokens:
-        if tok in SEPARATORS or set(tok) <= set(";&|\n"):
+        if tok is None:
             if current:
                 yield current
             current = []

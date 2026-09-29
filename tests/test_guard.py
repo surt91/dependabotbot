@@ -84,6 +84,15 @@ ALLOWED_BASH = [
     "sleep 30",
     "rustup toolchain install nightly --profile minimal",
     "cd workspace/x && cargo +nightly test --lib",
+    # Umleitungen dürfen nicht als Argumente gelesen werden
+    "git -C workspace/testrepo push -u origin dependabotbot/ok 2>&1",
+    "git -C workspace/testrepo push -u origin dependabotbot/ok 2>&1 | tail -5",
+    "git -C workspace/testrepo push -u origin dependabotbot/ok > /tmp/push.log 2>&1",
+    "git -C workspace/testrepo push -u origin dependabotbot/ok &> /tmp/push.log",
+    "git -C workspace/testrepo push -u origin dependabotbot/ok >>/tmp/push.log 2>/dev/null",
+    "git -C workspace/testrepo push -u origin dependabotbot/ok>/tmp/push.log",
+    "gh pr comment 3 -R surt91/x --body 'a > b && c; d | e'",
+    "gh pr comment 3 -R surt91/x --body \"It's fine\"",
 ]
 
 DENIED_BASH = [
@@ -151,6 +160,14 @@ DENIED_BASH = [
     "nice git push origin main",
     "echo main | xargs git push origin",
     "gh run rerun 123",
+    # Umleitungen dürfen verbotene Pushes nicht verschleiern
+    "git push origin main 2>&1",
+    "git push origin 2>&1 main",
+    "git push origin main > /dev/null",
+    "git push >/dev/null origin main",
+    "git push origin dependabotbot/x:main 2>/dev/null",
+    "echo $(git push origin main)",
+    "true && git push origin main 2>&1 | tail",
     "echo 'unbalanced",
 ]
 
