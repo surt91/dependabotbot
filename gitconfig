@@ -1,4 +1,5 @@
 # Globale git-Konfiguration nur für dependabotbot (wird von run.sh über GIT_CONFIG_GLOBAL gesetzt).
+# Die Commit-Identität kommt aus GIT_AUTHOR_NAME/GIT_AUTHOR_EMAIL in .env.
 [credential "https://github.com"]
 	helper =
 	helper = !gh auth git-credential

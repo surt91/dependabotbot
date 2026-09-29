@@ -7,8 +7,8 @@ nach `reports/` und benachrichtigt dich über Home Assistant. Gemergt wird nie v
 ## Setup
 
 1. `scripts/install-gh.sh` installiert gh nach `bin/`, nur für diesen Agenten.
-2. Einen Fine-grained PAT anlegen (siehe unten), dann `cp .env.example .env`, den Token eintragen
-   und `chmod 600 .env` ausführen.
+2. Einen Fine-grained PAT anlegen (siehe unten), dann `cp .env.example .env`, Token und Commit-Identität
+   (`GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`) eintragen und `chmod 600 .env` ausführen.
 3. `./run.sh` für eine interaktive Session oder `./run.sh --headless` für einen unbeaufsichtigten Lauf.
 
 ### Fine-grained PAT

@@ -54,6 +54,9 @@ export GIT_CONFIG_GLOBAL="$project/gitconfig"
 export GIT_CONFIG_NOSYSTEM=1
 export GIT_SSH_COMMAND=false
 export GIT_TERMINAL_PROMPT=0
+[[ -n "${GIT_AUTHOR_NAME:-}" && -n "${GIT_AUTHOR_EMAIL:-}" ]] \
+  || { echo "GIT_AUTHOR_NAME und GIT_AUTHOR_EMAIL müssen in .env gesetzt sein." >&2; exit 1; }
+export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME" GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
 
 # Marker für den Guard-Hook: ohne run.sh verweigert er alle Befehle
 export DEPENDABOTBOT_RUN=1
