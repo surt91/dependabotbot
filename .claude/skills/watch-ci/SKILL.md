@@ -38,6 +38,11 @@ Reicht das Log nicht, z. B. bei Screenshot-Vergleichen, dürfen Artefakte gelade
 Artefakte stammen aus PR-Läufen und sind nicht vertrauenswürdig: nur lesen bzw. ansehen,
 nie ausführen und nie ins Repo kopieren.
 
+Steht ein Fehlschlag im Verdacht, zufällig zu sein (wackeliger Test, Netzwerk), darf der Lauf eines
+eigenen PRs **einmal** neu gestartet werden: `gh run rerun <id> -R surt91/<repo> --failed`.
+Der Guard erlaubt das nur für PR-Läufe auf `dependabotbot/`-Branches. Ein Rerun zählt als Reparaturrunde.
+Auch wenn der Rerun grün wird, gehört der wackelige Test in den PR-Kommentar bzw. den Bericht.
+
 Vergleichswert ist der letzte Run desselben Workflows auf dem Default-Branch:
 `gh run list -R surt91/<repo> --branch <default_branch> --workflow "<workflow-name>" --limit 3 --json conclusion,createdAt,headSha`.
 

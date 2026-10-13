@@ -270,6 +270,31 @@ class GuardTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("run.sh", err)
 
+    def test_run_rerun(self):
+        # gh-Stub liefert je nach Run-ID Branch und Event, unbekannte Runs schlagen fehl
+        bindir = self.project.parent / "fake-bin"
+        bindir.mkdir(exist_ok=True)
+        stub = bindir / "gh"
+        stub.write_text(
+            "#!/bin/sh\n"
+            "case \"$3\" in\n"
+            "  1) echo '{\"headBranch\":\"dependabotbot/x\",\"event\":\"pull_request\"}' ;;\n"
+            "  2) echo '{\"headBranch\":\"main\",\"event\":\"push\"}' ;;\n"
+            "  3) echo '{\"headBranch\":\"dependabot/npm/x\",\"event\":\"pull_request\"}' ;;\n"
+            "  5) echo '{\"headBranch\":\"dependabotbot/x\",\"event\":\"push\"}' ;;\n"
+            "  *) exit 1 ;;\n"
+            "esac\n")
+        stub.chmod(0o755)
+        env = {"PATH": f"{bindir}{os.pathsep}{os.environ['PATH']}"}
+        for command in ["gh run rerun 1 -R surt91/x", "gh run rerun 1 -R surt91/x --failed"]:
+            with self.subTest(command=command):
+                self.assertAllowed("Bash", {"command": command}, env_overrides=env)
+        for command in ["gh run rerun 2 -R surt91/x", "gh run rerun 3 -R surt91/x", "gh run rerun 4 -R surt91/x",
+                        "gh run rerun 5 -R surt91/x", "gh run rerun 1 -R surt91/x --debug",
+                        "gh run rerun 1 -R someorg/x", "gh run rerun -R surt91/x", "gh run rerun 1"]:
+            with self.subTest(command=command):
+                self.assertDenied("Bash", {"command": command}, env_overrides=env)
+
     def test_push_without_workflow_changes(self):
         rel = self.repo.relative_to(self.project)
         self.assertAllowed("Bash", {"command": f"git -C {rel} push -u origin dependabotbot/ok"})
