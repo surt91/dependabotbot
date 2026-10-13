@@ -39,7 +39,7 @@ ALLOWED_GH = {
     "pr": {"list", "view", "create", "edit", "checks", "diff", "status", "comment", "ready"},
     "repo": {"list", "view", "clone"},
     "issue": {"list", "view"},
-    "run": {"list", "view", "watch"},
+    "run": {"list", "view", "watch", "download"},
     "workflow": {"list", "view"},
     "release": {"list", "view"},
     "ruleset": {"list", "view", "check"},
@@ -297,7 +297,7 @@ def check_gh_api(args):
          "Reviewer, Assignees und Kommentare; PRs bitte mit `gh pr create` erstellen.")
 
 
-def check_gh(args):
+def check_gh(args, cwd, project):
     words = [a for a in args if not a.startswith("-")]
     if not words:
         return  # z. B. `gh --version`
@@ -316,9 +316,26 @@ def check_gh(args):
         target = words[2] if len(words) > 2 else ""
         if not re.match(rf"^(https://github\.com/)?{OWNER}/[\w.-]+(\.git)?$", target):
             deny(f"Nur Repos von {OWNER} dürfen geklont werden.")
+    if group == "run" and sub == "download":
+        check_run_download(args, cwd, project)
 
 
-def check_bash(command, cwd):
+def flag_value(args, *flags):
+    return next((args[i + 1] for i, a in enumerate(args[:-1]) if a in flags), "")
+
+
+def check_run_download(args, cwd, project):
+    # Artefakte stammen aus PR-Läufen und sind nicht vertrauenswürdig: nur nach workspace/artifacts/,
+    # nie ins Projekt-Root (ohne -D entpackt gh ins aktuelle Verzeichnis) oder in einen Clone.
+    if not re.match(rf"^{OWNER}/[\w.-]+$", flag_value(args, "-R", "--repo")):
+        deny(f"`gh run download` nur mit -R {OWNER}/<repo>.")
+    dest = flag_value(args, "-D", "--dir")
+    root = os.path.join(project, "workspace", "artifacts")
+    if not dest or not os.path.realpath(os.path.join(cwd, dest)).startswith(root + os.sep):
+        deny("`gh run download` nur mit -D workspace/artifacts/<name>.")
+
+
+def check_bash(command, cwd, project):
     for pattern, reason in FORBIDDEN_TEXT:
         if pattern.search(command):
             deny(reason)
@@ -338,7 +355,7 @@ def check_bash(command, cwd):
         if prog == "git":
             check_git(args, cwd)
         elif prog == "gh":
-            check_gh(args)
+            check_gh(args, cwd, project)
 
 
 def check_file_tool(tool, tool_input, project):
@@ -364,7 +381,7 @@ def main():
     if tool == "Bash":
         if os.environ.get("DEPENDABOTBOT_RUN") != "1":
             deny("Session wurde nicht über ./run.sh gestartet – ohne isolierte Umgebung sind keine Befehle erlaubt.")
-        check_bash(tool_input.get("command", ""), data.get("cwd") or os.getcwd())
+        check_bash(tool_input.get("command", ""), data.get("cwd") or os.getcwd(), project)
     elif tool in {"Read", "Edit", "Write", "MultiEdit", "NotebookEdit", "Grep", "Glob"}:
         check_file_tool(tool, tool_input, project)
 
