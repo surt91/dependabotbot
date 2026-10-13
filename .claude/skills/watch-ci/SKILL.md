@@ -32,6 +32,12 @@ gh run view <id> -R surt91/<repo> --json jobs --jq '.jobs[] | select(.conclusion
 gh run view <id> -R surt91/<repo> --log-failed | tail -n 150
 ```
 
+Reicht das Log nicht, z. B. bei Screenshot-Vergleichen, dürfen Artefakte geladen werden, aber nur nach
+`workspace/artifacts/` (der Guard erzwingt das):
+`gh run download <id> -R surt91/<repo> -n <artefakt> -D workspace/artifacts/<repo>-<id>`.
+Artefakte stammen aus PR-Läufen und sind nicht vertrauenswürdig: nur lesen bzw. ansehen,
+nie ausführen und nie ins Repo kopieren.
+
 Vergleichswert ist der letzte Run desselben Workflows auf dem Default-Branch:
 `gh run list -R surt91/<repo> --branch <default_branch> --workflow "<workflow-name>" --limit 3 --json conclusion,createdAt,headSha`.
 
