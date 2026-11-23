@@ -39,7 +39,7 @@ ALLOWED_GH = {
     "pr": {"list", "view", "create", "edit", "checks", "diff", "status", "comment", "ready"},
     "repo": {"list", "view", "clone"},
     "issue": {"list", "view"},
-    "run": {"list", "view", "watch", "download"},
+    "run": {"list", "view", "watch", "download", "rerun"},
     "workflow": {"list", "view"},
     "release": {"list", "view"},
     "ruleset": {"list", "view", "check"},
@@ -318,6 +318,8 @@ def check_gh(args, cwd, project):
             deny(f"Nur Repos von {OWNER} dürfen geklont werden.")
     if group == "run" and sub == "download":
         check_run_download(args, cwd, project)
+    if group == "run" and sub == "rerun":
+        check_run_rerun(args, words)
 
 
 def flag_value(args, *flags):
@@ -333,6 +335,27 @@ def check_run_download(args, cwd, project):
     root = os.path.join(project, "workspace", "artifacts")
     if not dest or not os.path.realpath(os.path.join(cwd, dest)).startswith(root + os.sep):
         deny("`gh run download` nur mit -D workspace/artifacts/<name>.")
+
+
+def check_run_rerun(args, words):
+    # Nur Läufe eigener PR-Branches neu starten. Läufe auf dem Default-Branch können deployen
+    # (z. B. gh-pages) und laufen mit allen Secrets.
+    repo = flag_value(args, "-R", "--repo")
+    if not re.match(rf"^{OWNER}/[\w.-]+$", repo):
+        deny(f"`gh run rerun` nur mit -R {OWNER}/<repo>.")
+    run_id = words[2] if len(words) > 2 else ""
+    if not run_id.isdigit():
+        deny("`gh run rerun` nur mit expliziter Run-ID.")
+    if any(a == "--debug" or a == "-d" for a in args):
+        deny("`gh run rerun --debug` ist nicht erlaubt.")
+    info = subprocess.run(["gh", "run", "view", run_id, "-R", repo, "--json", "headBranch,event"],
+                          capture_output=True, text=True)
+    try:
+        run = json.loads(info.stdout)
+    except ValueError:
+        deny("Run konnte nicht geprüft werden, `gh run rerun` abgelehnt.")
+    if not run.get("headBranch", "").startswith("dependabotbot/") or run.get("event") != "pull_request":
+        deny("`gh run rerun` nur für PR-Läufe auf `dependabotbot/`-Branches.")
 
 
 def check_bash(command, cwd, project):
